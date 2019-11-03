@@ -120,7 +120,8 @@ num_obs <- 1:dim(history_array)[2]
 
 country_acronyms <- attr(history_array, "dimnames")[[1]]
 
-history_array[num_countries, num_obs,1] %>%
+elo_history <- 
+  history_array[num_countries, num_obs,1] %>%
   as_tibble() %>% 
   add_column(country_acronyms,.before = "1") %>% 
   pivot_longer(cols = -country_acronyms) %>% 
@@ -133,7 +134,33 @@ history_array[num_countries, num_obs,1] %>%
   filter(elo_rating != last_elo) %>% 
   filter(country_acronyms %in% countries_examined) %>% 
   left_join(date_indicies,
-            by = c("time_index" = "date_index")) %>% 
+            by = c("time_index" = "date_index")) 
+
+elo_history
+```
+
+```{r}
+elo_history %>% 
+  mutate(match_quarter = quarter(match_date),
+         match_year = year(match_date)) %>% 
+  group_by(match_year, country_acronyms) %>%
+  summarise(mean_elo_period = mean(elo_rating, na.rm = T),
+            year_start_date = min(match_date)) %>% 
+  group_by(match_year) %>% 
+  mutate(median_team_elo = median(mean_elo_period, na.rm = T),
+         elo_diff_median_team = mean_elo_period - median_team_elo) %>% 
+  ggplot(aes(x = year_start_date, 
+             color = country_acronyms,
+             y = elo_diff_median_team)) +
+  geom_point() +
+  geom_smooth(se = F) +
+  facet_wrap(vars(country_acronyms)) +
+  geom_hline(yintercept = 0)
+```
+
+
+```{r}
+elo_history %>% 
   ggplot(aes(x = match_date, 
              y = elo_rating,
              color = country_acronyms)) +
