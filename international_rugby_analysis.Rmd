@@ -27,6 +27,11 @@ international_rugby_results
 ```
 
 ```{r}
+date_indexes 
+```
+
+
+```{r}
 get_hyphen_start <- function(x){
   x[1, "start"]
 }
@@ -34,11 +39,21 @@ get_hyphen_start <- function(x){
 
 
 ```{r}
+countries_examined <- c("SAF","NZL", "AUS", "ENG", "FRA", "WAL", "IRE", "SCO")
+```
+
+FRA	2315	46	32	0	14	5
+6	WAL	2288	38	21	0	17	1
+7	IRE	2277	36	22	0	14	6
+8	ARG	2262	38	20	0	18	15
+9	SCO
+
+```{r}
 result <- 
   international_rugby_results %>% 
   clean_names() %>% 
   select(match_date = date,
-         #tourn,
+         tourn,
          teams = match,
          score,
          venue) %>% 
@@ -56,6 +71,10 @@ result <-
          -score) %>% 
   filter(left_team != "LIO",
          right_team != "LIO") %>% 
+  filter(tourn == "WC",
+         match_date > dmy("01/01/1995")) %>% 
+  filter(left_team %in% countries_examined,
+         right_team %in% countries_examined) %>%
   mutate(binary_result = case_when(
     left_team_score == right_team_score ~ 0.5,
     left_team_score > right_team_score ~ 1,
@@ -67,7 +86,7 @@ result <-
                             left_team, 
                             right_team, 
                             binary_result)) %>% 
-  mutate(elo_result = map(data_for_elo, elo, history = TRUE),
+  mutate(elo_result = map(data_for_elo, elo, history = TRUE, kfac = 40),
          history = map(elo_result, pluck, "history")) 
 
 
@@ -76,13 +95,32 @@ result
 ```
 
 ```{r}
+date_indicies <- 
+  result %>% 
+  pull(data) %>% 
+  pluck(1) %>% 
+  mutate(date_index = row_number()) %>% 
+  select(match_date, date_index)
+
+date_indicies
+```
+
+
+```{r}
+result %>% 
+  pull(elo_result)
+```
+
+
+```{r}
 history_array <- result[[1, "history"]] 
 
-#str(history_array)
+num_countries <- 1:dim(history_array)[1]
+num_obs <- 1:dim(history_array)[2]
 
 country_acronyms <- attr(history_array, "dimnames")[[1]]
 
-history_array[1:31,1:1931,1] %>%
+history_array[num_countries, num_obs,1] %>%
   as_tibble() %>% 
   add_column(country_acronyms,.before = "1") %>% 
   pivot_longer(cols = -country_acronyms) %>% 
@@ -93,10 +131,14 @@ history_array[1:31,1:1931,1] %>%
   group_by(country_acronyms) %>% 
   mutate(last_elo = lag(elo_rating)) %>% 
   filter(elo_rating != last_elo) %>% 
-  #filter(country_acronyms %in% c("SAF", "NZL")) %>% 
-  ggplot(aes(x = time_index, 
+  filter(country_acronyms %in% countries_examined) %>% 
+  left_join(date_indicies,
+            by = c("time_index" = "date_index")) %>% 
+  ggplot(aes(x = match_date, 
              y = elo_rating,
              color = country_acronyms)) +
-  geom_line()
+  geom_point() +
+  geom_smooth(se = F) +
+  facet_wrap(facets = vars(country_acronyms))
 ```
 
